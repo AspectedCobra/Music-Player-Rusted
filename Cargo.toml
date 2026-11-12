@@ -1,0 +1,25 @@
+[package]
+name = "music-player"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+
+[dependencies]
+eframe = "0.29"
+rodio = { version = "0.20", default-features = false, features = ["symphonia-all"] }
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+indexmap = { version = "2", features = ["serde"] }
+regex = "1"
+rand = "0.8"
+lofty = "0.22"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+
+[profile.dev]
+opt-level = 2        # the equalizer runs per audio sample, debug builds would stutter
+
+[profile.release]
+lto = true
+codegen-units = 1
