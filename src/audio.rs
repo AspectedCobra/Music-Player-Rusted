@@ -169,7 +169,7 @@ impl Player {
     /// old one fades out (equal-power crossfade, driven by tick_fade()).
     pub fn play(&mut self, path: &Path, gain_db: f32, fade_secs: f32) -> Result<(), String> {
         let file = File::open(path).map_err(|e| format!("{}: {e}", path.display()))?;
-        let decoder = Decoder::try_from(file).map_err(|e| format!("cannot decode {}: {e}", path.display()))?;
+        let decoder = Decoder::new(std::io::BufReader::new(file)).map_err(|e| format!("cannot decode {}: {e}", path.display()))?;
         let source = EqSource::new(decoder.convert_samples::<f32>(), self.eq.clone());
         let sink = Sink::try_new(&self.handle).map_err(|e| e.to_string())?;
         let fading = fade_secs > 0.0 && self.status().0 == PState::Playing;
