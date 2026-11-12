@@ -1,0 +1,35 @@
+name: build-windows
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build
+        run: cargo build --release
+
+      - name: Bundle exe with yt-dlp, ffmpeg and deno
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force music-player | Out-Null
+          Copy-Item target/release/music-player.exe music-player/
+          Invoke-WebRequest https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe -OutFile music-player/yt-dlp.exe
+          Invoke-WebRequest https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip -OutFile ffmpeg.zip
+          Expand-Archive ffmpeg.zip -DestinationPath ffmpeg-tmp
+          Copy-Item (Get-ChildItem ffmpeg-tmp -Recurse -Filter ffmpeg.exe | Select-Object -First 1).FullName music-player/
+          Invoke-WebRequest https://github.com/denoland/deno/releases/latest/download/deno-x86_64-pc-windows-msvc.zip -OutFile deno.zip
+          Expand-Archive deno.zip -DestinationPath music-player
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: music-player-windows
+          path: music-player/
