@@ -372,3 +372,36 @@ fn try_lyrics(track: &Track) -> Result<Lyrics, String> {
     }
     Ok(Lyrics::new(&track.id, LState::NotFound))
 }
+
+// ------------------------------------------------------- playable format
+/// rodio 0.20 cannot open mp4/m4a files whose index sits at the end (what yt-dlp and ffmpeg
+/// write), so those are converted to WAV with ffmpeg first. Converted files are cached.
+pub fn playable(src: &Path, tmp: &Path) -> Result<PathBuf, String> {
+    let ext = src.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+    if matches!(ext.as_str(), "wav" | "flac" | "mp3" | "ogg") {
+        return Ok(src.to_path_buf());
+    }
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    src.hash(&mut h);
+    let key = format!("{:016x}", h.finish());
+    let dir = tmp.join("play");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let out = dir.join(format!("{key}.wav"));
+    let lock = LOCKS.lock().unwrap().entry(format!("play:{key}")).or_default().clone();
+    let _guard = lock.lock().unwrap();
+    if out.exists() {
+        return Ok(out);
+    }
+    let part = dir.join(format!("{key}.part.wav"));
+    let res = command("ffmpeg")
+        .args(["-y", "-loglevel", "error", "-i"]).arg(src)
+        .args(["-vn", "-c:a", "pcm_s16le"]).arg(&part)
+        .output().map_err(|e| format!("could not run ffmpeg ({e})"))?;
+    if !res.status.success() {
+        let _ = std::fs::remove_file(&part);
+        return Err(format!("ffmpeg could not convert the song: {}", String::from_utf8_lossy(&res.stderr).lines().last().unwrap_or("")));
+    }
+    std::fs::rename(&part, &out).map_err(|e| e.to_string())?;
+    Ok(out)
+}
