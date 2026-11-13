@@ -509,7 +509,10 @@ impl App {
         std::thread::spawn(move || match ytm::fetch(&track, &tmp) {
             Ok(path) => {
                 let l = if loud { lufs.get_or_measure(&track.id, &path) } else { lufs.get(&track.id) };
-                bus.send(Msg::Ready { gen, path, lufs: l, fade });
+                match ytm::playable(&path, &tmp) {
+                    Ok(path) => bus.send(Msg::Ready { gen, path, lufs: l, fade }),
+                    Err(err) => bus.send(Msg::Failed { gen, err }),
+                }
             }
             Err(err) => bus.send(Msg::Failed { gen, err }),
         });
@@ -767,6 +770,7 @@ impl App {
         std::thread::spawn(move || {
             if let Ok(p) = ytm::fetch(&t, &tmp) {
                 if loud { lufs.get_or_measure(&t.id, &p); }
+                let _ = ytm::playable(&p, &tmp);
             }
         });
     }
@@ -1509,7 +1513,7 @@ impl eframe::App for App {
 }
 
 fn main() -> eframe::Result<()> {
-        std::panic::set_hook(Box::new(|info| {
+    std::panic::set_hook(Box::new(|info| {
         let msg = format!("{info}\n{}\n", std::backtrace::Backtrace::force_capture());
         let dir = std::env::current_exe().ok().and_then(|p| p.parent().map(|d| d.to_path_buf())).unwrap_or_default();
         let _ = std::fs::OpenOptions::new().create(true).append(true).open(dir.join("crash.log"))
