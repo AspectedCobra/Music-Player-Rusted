@@ -1509,6 +1509,13 @@ impl eframe::App for App {
 }
 
 fn main() -> eframe::Result<()> {
+        std::panic::set_hook(Box::new(|info| {
+        let msg = format!("{info}\n{}\n", std::backtrace::Backtrace::force_capture());
+        let dir = std::env::current_exe().ok().and_then(|p| p.parent().map(|d| d.to_path_buf())).unwrap_or_default();
+        let _ = std::fs::OpenOptions::new().create(true).append(true).open(dir.join("crash.log"))
+            .and_then(|mut f| { use std::io::Write; f.write_all(msg.as_bytes()) });
+        eprintln!("{msg}");
+    }));
     // yt-dlp.exe, ffmpeg.exe and deno.exe placed next to music-player.exe are found first
     if let Some(dir) = std::env::current_exe().ok().and_then(|p| p.parent().map(|d| d.to_path_buf())) {
         let mut paths = vec![dir];
