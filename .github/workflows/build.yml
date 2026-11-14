@@ -20,16 +20,16 @@ jobs:
       - name: Bundle exe with yt-dlp, ffmpeg and deno
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force music-player | Out-Null
-          Copy-Item target/release/music-player.exe music-player/
-          Invoke-WebRequest https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe -OutFile music-player/yt-dlp.exe
+          New-Item -ItemType Directory -Force meld | Out-Null
+          Copy-Item target/release/meld.exe meld/
+          Invoke-WebRequest https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe -OutFile meld/yt-dlp.exe
           Invoke-WebRequest https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip -OutFile ffmpeg.zip
           Expand-Archive ffmpeg.zip -DestinationPath ffmpeg-tmp
-          Copy-Item (Get-ChildItem ffmpeg-tmp -Recurse -Filter ffmpeg.exe | Select-Object -First 1).FullName music-player/
+          Copy-Item (Get-ChildItem ffmpeg-tmp -Recurse -Filter ffmpeg.exe | Select-Object -First 1).FullName meld/
           Invoke-WebRequest https://github.com/denoland/deno/releases/latest/download/deno-x86_64-pc-windows-msvc.zip -OutFile deno.zip
-          Expand-Archive deno.zip -DestinationPath music-player
+          Expand-Archive deno.zip -DestinationPath meld
 
       - uses: actions/upload-artifact@v4
         with:
-          name: music-player-windows
-          path: music-player/
+          name: meld-windows
+          path: meld/
