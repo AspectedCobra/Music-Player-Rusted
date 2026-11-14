@@ -27,12 +27,12 @@ const DIM: Color32 = Color32::from_rgb(122, 122, 122);
 const BORDER: Color32 = Color32::from_rgb(46, 46, 46);
 const HOVER_BG: Color32 = Color32::from_rgb(20, 20, 20);
 const TRACK: Color32 = Color32::from_rgb(38, 38, 38);
-const ROW: f32 = 30.0;
+const ROW: f32 = 24.0;
 
 #[derive(Clone, Copy, PartialEq)]
 enum View { Results, Queue, Lyrics, Library, Playlists, Taste, Stats, Audio, Settings }
 const TABS: [(View, &str); 9] = [
-    (View::Results, "results"), (View::Queue, "queue"), (View::Lyrics, "lyrics"), (View::Library, "library"),
+    (View::Results, "results"), (View::Queue, "queue"), (View::Library, "library"), (View::Lyrics, "lyrics"),
     (View::Playlists, "playlists"), (View::Taste, "taste"), (View::Stats, "stats"), (View::Audio, "audio"),
     (View::Settings, "settings"),
 ];
@@ -48,7 +48,7 @@ fn setup_smtc(cc: &eframe::CreationContext<'_>, tx: Sender<Msg>, ctx: egui::Cont
     use raw_window_handle::{HasWindowHandle, RawWindowHandle};
     let RawWindowHandle::Win32(h) = cc.window_handle().ok()?.as_raw() else { return None };
     let mut c = MediaControls::new(PlatformConfig {
-        dbus_name: "music_player", display_name: "Music Player", hwnd: Some(h.hwnd.get() as *mut std::ffi::c_void),
+        dbus_name: "meld", display_name: "Meld", hwnd: Some(h.hwnd.get() as *mut std::ffi::c_void),
     }).ok()?;
     c.attach(move |e| {
         let k = match e {
@@ -216,25 +216,25 @@ fn install_fonts(ctx: &egui::Context) {
     for (_, f) in style.text_styles.iter_mut() {
         f.family = egui::FontFamily::Monospace;
     }
-    style.text_styles.insert(egui::TextStyle::Body, FontId::monospace(14.0));
-    style.text_styles.insert(egui::TextStyle::Button, FontId::monospace(14.0));
-    style.text_styles.insert(egui::TextStyle::Monospace, FontId::monospace(14.0));
+    style.text_styles.insert(egui::TextStyle::Body, FontId::monospace(13.0));
+    style.text_styles.insert(egui::TextStyle::Button, FontId::monospace(13.0));
+    style.text_styles.insert(egui::TextStyle::Monospace, FontId::monospace(13.0));
     style.text_styles.insert(egui::TextStyle::Small, FontId::monospace(12.0));
-    style.spacing.item_spacing = vec2(8.0, 4.0);
+    style.spacing.item_spacing = vec2(6.0, 2.0);
     ctx.set_style(style);
 }
 
 // ------------------------------------------------------------- small widgets
 fn boxed() -> egui::Frame {
     egui::Frame::none().fill(BG).stroke(Stroke::new(1.0, BORDER))
-        .inner_margin(egui::Margin::same(10.0)).outer_margin(egui::Margin::symmetric(8.0, 3.0))
+        .inner_margin(egui::Margin::same(6.0)).outer_margin(egui::Margin::symmetric(6.0, 2.0))
 }
 
 /// A '[button]' in terminal style: coloured text, accent colour on hover. `bg` draws it as a filled bar.
 fn tbtn2(ui: &mut egui::Ui, text: &str, fg: Color32, bg: Option<Color32>, acc: Color32) -> egui::Response {
-    let font = FontId::monospace(14.0);
+    let font = FontId::monospace(13.0);
     let galley = ui.painter().layout_no_wrap(text.to_string(), font.clone(), fg);
-    let (rect, resp) = ui.allocate_exact_size(galley.size() + vec2(8.0, 6.0), Sense::click());
+    let (rect, resp) = ui.allocate_exact_size(galley.size() + vec2(6.0, 4.0), Sense::click());
     if let Some(b) = bg {
         ui.painter().rect_filled(rect, 0.0, b);
     }
@@ -262,7 +262,7 @@ enum RowAct { None, Play, Right, Up, Remove }
 /// One song line: '01  title        artist     3:35'. The playing song is drawn in inverse
 /// video. actions: 0 none, 1 = [^] [x], 2 = [x].
 fn track_row(ui: &mut egui::Ui, t: &Track, label: &str, playing: bool, actions: u8, acc: Color32) -> RowAct {
-    let font = FontId::monospace(14.0);
+    let font = FontId::monospace(13.0);
     let cw = ui.fonts(|f| f.glyph_width(&font, '0'));
     let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), ROW), Sense::click());
     let p = ui.painter_at(rect);
@@ -305,7 +305,7 @@ fn track_row(ui: &mut egui::Ui, t: &Track, label: &str, playing: bool, actions: 
 
 /// A clickable line with text on the left and dim text on the right.
 fn line_row(ui: &mut egui::Ui, left: &str, right: &str) -> bool {
-    let font = FontId::monospace(14.0);
+    let font = FontId::monospace(13.0);
     let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), ROW), Sense::click());
     if resp.hovered() {
         ui.painter().rect_filled(rect, 0.0, HOVER_BG);
@@ -316,14 +316,20 @@ fn line_row(ui: &mut egui::Ui, left: &str, right: &str) -> bool {
 }
 
 fn bar_row(ui: &mut egui::Ui, name: &str, frac: f32, value: &str, acc: Color32) {
-    let font = FontId::monospace(14.0);
-    let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 26.0), Sense::hover());
+    let font = FontId::monospace(13.0);
+    let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 22.0), Sense::hover());
     let p = ui.painter();
     let cy = rect.center().y;
     p.text(pos2(rect.left() + 10.0, cy), Align2::LEFT_CENTER, ell(name, 24), font.clone(), WHITE);
     let x0 = rect.left() + rect.width() * 0.45;
     p.rect_filled(Rect::from_min_size(pos2(x0, cy - 4.0), vec2(200.0 * frac.clamp(0.0, 1.0), 8.0)), 0.0, acc);
     p.text(pos2(rect.right() - 16.0, cy), Align2::RIGHT_CENTER, value, font, DIM);
+}
+
+/// A thin vertical divider between button groups.
+fn sep(ui: &mut egui::Ui) {
+    let (r, _) = ui.allocate_exact_size(vec2(1.0, 14.0), Sense::hover());
+    ui.painter().rect_filled(r, 0.0, Color32::from_rgb(64, 64, 64));
 }
 
 fn heading(ui: &mut egui::Ui, text: &str) {
@@ -377,7 +383,7 @@ impl App {
                 None
             }
         };
-        let tmpdir = std::env::temp_dir().join(format!("musicapp_{}", std::process::id()));
+        let tmpdir = std::env::temp_dir().join(format!("meld_{}", std::process::id()));
         let _ = std::fs::create_dir_all(&tmpdir);
         apply_visuals(&cc.egui_ctx, rgb(accent_rgb(&settings.theme)));
         let theme_applied = settings.theme.clone();
@@ -1147,17 +1153,12 @@ impl App {
 impl App {
     fn ui(&mut self, ctx: &egui::Context) {
         let acc = self.accent();
-        egui::TopBottomPanel::top("search").frame(boxed()).show(ctx, |ui| self.search_bar(ui, acc));
+        egui::TopBottomPanel::top("search").frame(boxed()).show(ctx, |ui| {
+            self.search_bar(ui, acc);
+            self.tab_bar(ui, acc);
+        });
         egui::TopBottomPanel::bottom("player").frame(boxed()).show(ctx, |ui| self.now_playing(ui, acc));
         egui::CentralPanel::default().frame(boxed()).show(ctx, |ui| {
-            ui.horizontal_wrapped(|ui| {
-                for (v, label) in TABS {
-                    let active = self.view == v;
-                    let r = if active { tbtn2(ui, &format!(" {label} "), BG, Some(acc), acc) } else { tbtn(ui, &format!(" {label} "), DIM, acc) };
-                    if r.clicked() { self.set_view(v); }
-                }
-            });
-            ui.separator();
             match self.view {
                 View::Results | View::Queue | View::Library => self.draw_tracks(ui, acc),
                 View::Lyrics => self.draw_lyrics(ui, acc),
@@ -1170,49 +1171,72 @@ impl App {
         });
     }
 
+    fn tab_bar(&mut self, ui: &mut egui::Ui, acc: Color32) {
+        ui.horizontal_wrapped(|ui| {
+            for (i, (v, label)) in TABS.iter().enumerate() {
+                if i == 4 || i == 7 { sep(ui); } // groups: browse | yours | tune
+                let text = format!(" {label} ");
+                let r = if self.view == *v { tbtn2(ui, &text, BG, Some(acc), acc) } else { tbtn(ui, &text, DIM, acc) };
+                if r.clicked() { self.set_view(*v); }
+            }
+        });
+    }
+
+    fn open_saved_folder(&mut self) {
+        let _ = std::fs::create_dir_all(&self.paths.save);
+        if std::process::Command::new("explorer").arg(&self.paths.save).spawn().is_err() {
+            self.flash("Could not open the folder", 3.0);
+        }
+    }
+
     fn search_bar(&mut self, ui: &mut egui::Ui, acc: Color32) {
         ui.horizontal(|ui| {
             ui.label(RichText::new(">").color(acc).strong());
-            let w = (ui.available_width() - 190.0).max(100.0);
+            let w = (ui.available_width() - 260.0).max(100.0);
             let r = ui.add(egui::TextEdit::singleline(&mut self.search).id(self.search_id).frame(false).desired_width(w)
-                .hint_text(RichText::new("search songs, or a playlist name   ( / to focus, esc to leave )").color(DIM)));
+                .hint_text(RichText::new("search songs   ( / to focus, esc to leave )").color(DIM)));
             if r.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter)) { self.do_search(); }
-            if tbtn(ui, "[random]", WHITE, acc).clicked() { self.play_random(); }
             if tbtn(ui, "[search]", WHITE, acc).clicked() { self.do_search(); }
+            if tbtn(ui, "[random]", WHITE, acc).clicked() { self.play_random(); }
+            sep(ui);
+            if tbtn(ui, "[folder]", WHITE, acc).on_hover_text("open the saved songs folder").clicked() { self.open_saved_folder(); }
         });
     }
 
     fn now_playing(&mut self, ui: &mut egui::Ui, acc: Color32) {
         let track = self.current_track().cloned();
+        // row 1: cover, title/artist, and the play modes
         ui.horizontal(|ui| {
             if self.settings.cover != "off" {
-                let size = cover::COVER_N as f32 * 5.0;
+                let cell = 4.0;
+                let size = cover::COVER_N as f32 * cell;
                 let (rect, _) = ui.allocate_exact_size(vec2(size, size), Sense::hover());
                 let p = ui.painter();
-                p.rect_stroke(rect.expand(2.0), 0.0, Stroke::new(1.0, BORDER));
+                p.rect_stroke(rect.expand(1.0), 0.0, Stroke::new(1.0_f32, BORDER));
                 for (i, c) in self.cover_cells.iter().enumerate() {
                     let (r, col) = (i as u32 / cover::COVER_N, i as u32 % cover::COVER_N);
-                    p.rect_filled(Rect::from_min_size(rect.min + vec2(col as f32 * 5.0, r as f32 * 5.0), vec2(5.0, 5.0)), 0.0, rgb(*c));
+                    p.rect_filled(Rect::from_min_size(rect.min + vec2(col as f32 * cell, r as f32 * cell), vec2(cell, cell)), 0.0, rgb(*c));
                 }
             }
             ui.vertical(|ui| {
+                ui.spacing_mut().item_spacing.y = 1.0;
                 let title = track.as_ref().map(|t| t.title.clone()).unwrap_or_else(|| "not playing".into());
-                ui.label(RichText::new(ell(&title, 60)).strong().size(16.0));
+                ui.label(RichText::new(ell(&title, 60)).strong().size(15.0));
                 let sub = if Instant::now() < self.flash.1 { self.flash.0.clone() }
                     else if self.busy { self.busy_text.clone() }
                     else { track.as_ref().map(|t| t.artist.clone()).unwrap_or_default() };
                 ui.label(RichText::new(ell(&sub, 70)).color(DIM));
             });
-            ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
-                let first = track.as_ref().and_then(|t| split_artists(&t.artist).into_iter().next());
-                let banned = first.as_ref().map(|a| self.taste.is_banned(a)).unwrap_or(false);
-                let liked = track.as_ref().map(|t| self.taste.is_liked(&t.id)).unwrap_or(false);
-                if tbtn(ui, &format!("[{} autosave]", if self.autosave { "x" } else { " " }), if self.autosave { WHITE } else { DIM }, acc).clicked() {
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                let on = |b: bool| if b { acc } else { DIM };
+                if tbtn(ui, "[autosave]", on(self.autosave), acc).clicked() {
                     self.autosave = !self.autosave;
                     if self.autosave { self.flash("Autosave on: songs you listen to are saved", 3.0); }
                 }
-                if tbtn(ui, if banned { "[unban]" } else { "[never]" }, WHITE, acc).clicked() { self.never_current(); }
-                if tbtn(ui, if liked { "[liked]" } else { "[like]" }, if liked { acc } else { WHITE }, acc).clicked() { self.like_current(); }
+                let rep = match self.repeat { Repeat::Off => "[repeat]", Repeat::All => "[repeat all]", Repeat::One => "[repeat one]" };
+                if tbtn(ui, rep, on(self.repeat != Repeat::Off), acc).clicked() { self.cycle_repeat(); }
+                if tbtn(ui, "[shuffle]", on(self.shuffle), acc).clicked() { self.toggle_shuffle(); }
+                if tbtn(ui, "[autoplay]", on(self.autoplay), acc).clicked() { self.toggle_autoplay(); }
                 let mut status = vec![];
                 if self.offline() { status.push(if self.settings.offline { "offline mode".to_string() } else { "offline".into() }); }
                 if let Some(end) = self.sleep_end { status.push(format!("sleep in {}", fmt(end.saturating_duration_since(Instant::now()).as_secs_f64()))); }
@@ -1220,10 +1244,12 @@ impl App {
             });
         });
 
-        // seek bar
+        // row 2: time, seek bar, time remaining
         let len = if self.busy { 0.0 } else { self.length };
-        let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 18.0), Sense::click_and_drag());
-        let ptr_frac = resp.interact_pointer_pos().map(|p| ((p.x - rect.left()) / rect.width()).clamp(0.0, 1.0));
+        let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 16.0), Sense::hover());
+        let bar = Rect::from_min_max(pos2(rect.left() + 48.0, rect.top()), pos2(rect.right() - 52.0, rect.bottom()));
+        let resp = ui.interact(bar, ui.id().with("seek"), Sense::click_and_drag());
+        let ptr_frac = resp.interact_pointer_pos().map(|p| ((p.x - bar.left()) / bar.width()).clamp(0.0, 1.0));
         if resp.dragged() && self.has_track && len > 0.0 { self.drag_frac = ptr_frac; }
         let shown = self.drag_frac.map(|f| f as f64).unwrap_or(if len > 0.0 { (self.pos / len).min(1.0) } else { 0.0 });
         if resp.drag_stopped() {
@@ -1231,32 +1257,33 @@ impl App {
         } else if resp.clicked() {
             if let Some(f) = ptr_frac { self.seek_to(f as f64 * len); }
         }
-        let cy = rect.center().y;
-        let x = rect.left() + shown as f32 * rect.width();
+        let cy = bar.center().y;
+        let x = bar.left() + shown as f32 * bar.width();
         let p = ui.painter();
-        p.rect_filled(Rect::from_min_max(pos2(rect.left(), cy - 3.0), pos2(rect.right(), cy + 3.0)), 0.0, TRACK);
-        p.rect_filled(Rect::from_min_max(pos2(rect.left(), cy - 3.0), pos2(x, cy + 3.0)), 0.0, acc);
-        p.rect_filled(Rect::from_min_max(pos2(x - 3.0, cy - 9.0), pos2(x + 3.0, cy + 9.0)), 0.0, WHITE);
+        p.rect_filled(Rect::from_min_max(pos2(bar.left(), cy - 2.0), pos2(bar.right(), cy + 2.0)), 0.0, TRACK);
+        p.rect_filled(Rect::from_min_max(pos2(bar.left(), cy - 2.0), pos2(x, cy + 2.0)), 0.0, acc);
+        p.rect_filled(Rect::from_min_max(pos2(x - 2.5, cy - 7.0), pos2(x + 2.5, cy + 7.0)), 0.0, WHITE);
         let pos = shown * len;
-        let (r2, _) = ui.allocate_exact_size(vec2(rect.width(), 16.0), Sense::hover());
         let font = FontId::monospace(12.0);
-        ui.painter().text(r2.left_center(), Align2::LEFT_CENTER, fmt(pos), font.clone(), DIM);
-        ui.painter().text(r2.right_center(), Align2::RIGHT_CENTER, format!("-{}", fmt(len - pos)), font, DIM);
+        p.text(rect.left_center(), Align2::LEFT_CENTER, fmt(pos), font.clone(), DIM);
+        p.text(rect.right_center(), Align2::RIGHT_CENTER, format!("-{}", fmt(len - pos)), font, DIM);
 
-        // controls
+        // row 3: playback | this song | volume
         ui.horizontal(|ui| {
-            if tbtn(ui, &format!("[{}] autoplay", if self.autoplay { "x" } else { " " }), if self.autoplay { WHITE } else { DIM }, acc).clicked() { self.toggle_autoplay(); }
             if tbtn(ui, "[prev]", WHITE, acc).clicked() { self.prev(); }
             let playing = self.has_track && matches!(self.state, PState::Playing) || self.busy;
             if tbtn(ui, if playing { "[pause]" } else { "[play]" }, WHITE, acc).clicked() { self.toggle(); }
             if tbtn(ui, "[next]", WHITE, acc).clicked() { self.next(); }
             if tbtn(ui, "[stop]", WHITE, acc).clicked() { self.stop(); }
+            sep(ui);
+            let first = track.as_ref().and_then(|t| split_artists(&t.artist).into_iter().next());
+            let banned = first.as_ref().map(|a| self.taste.is_banned(a)).unwrap_or(false);
+            let liked = track.as_ref().map(|t| self.taste.is_liked(&t.id)).unwrap_or(false);
             if tbtn(ui, "[save]", WHITE, acc).clicked() { self.save_current(); }
-            if tbtn(ui, &format!("[shuffle: {}]", if self.shuffle { "on" } else { "off" }), if self.shuffle { WHITE } else { DIM }, acc).clicked() { self.toggle_shuffle(); }
-            let rep = match self.repeat { Repeat::Off => "off", Repeat::All => "all", Repeat::One => "one" };
-            if tbtn(ui, &format!("[repeat: {rep}]"), if self.repeat == Repeat::Off { DIM } else { WHITE }, acc).clicked() { self.cycle_repeat(); }
+            if tbtn(ui, if liked { "[liked]" } else { "[like]" }, if liked { acc } else { WHITE }, acc).clicked() { self.like_current(); }
+            if tbtn(ui, if banned { "[unban]" } else { "[never]" }, WHITE, acc).clicked() { self.never_current(); }
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                ui.spacing_mut().slider_width = 110.0;
+                ui.spacing_mut().slider_width = 100.0;
                 let mut v = self.volume;
                 if ui.add(egui::Slider::new(&mut v, 0.0..=100.0).integer().suffix("%")).changed() { self.set_volume(v); }
                 ui.label(RichText::new("vol").color(DIM));
@@ -1622,9 +1649,11 @@ fn main() -> eframe::Result<()> {
             std::env::set_var("PATH", joined);
         }
     }
-    let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_inner_size([940.0, 700.0]).with_min_inner_size([820.0, 600.0]).with_title("music"),
-        ..Default::default()
-    };
-    eframe::run_native("music", options, Box::new(|cc| Ok(Box::new(App::new(cc)))))
+    let mut viewport = egui::ViewportBuilder::default().with_inner_size([900.0, 620.0]).with_min_inner_size([700.0, 480.0]).with_title("Meld");
+    if let Ok(img) = image::load_from_memory(include_bytes!("../assets/icon.png")) {
+        let img = img.to_rgba8();
+        viewport = viewport.with_icon(egui::IconData { width: img.width(), height: img.height(), rgba: img.into_raw() });
+    }
+    let options = eframe::NativeOptions { viewport, ..Default::default() };
+    eframe::run_native("Meld", options, Box::new(|cc| Ok(Box::new(App::new(cc)))))
 }
