@@ -17,6 +17,8 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use store::*;
 use taste::Taste;
+use global_hotkey::{hotkey::{Code, HotKey}, GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState};
+use souvlaki::{MediaControlEvent, MediaControls, MediaMetadata, MediaPlayback, MediaPosition, PlatformConfig};
 use ytm::{LState, Lyrics};
 
 const BG: Color32 = Color32::BLACK;
@@ -38,6 +40,43 @@ const TABS: [(View, &str); 9] = [
 enum QueueKind { Auto, List }
 #[derive(Clone, Copy, PartialEq)]
 enum Repeat { Off, All, One }
+#[derive(Clone, Copy)]
+enum MediaKey { PlayPause, Play, Pause, Next, Prev, Stop }
+
+/// Windows 'now playing' overlay (volume pop-up, lock screen): title, artist, cover, and its buttons.
+fn setup_smtc(cc: &eframe::CreationContext<'_>, tx: Sender<Msg>, ctx: egui::Context) -> Option<MediaControls> {
+    use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+    let RawWindowHandle::Win32(h) = cc.window_handle().ok()?.as_raw() else { return None };
+    let mut c = MediaControls::new(PlatformConfig {
+        dbus_name: "music_player", display_name: "Music Player", hwnd: Some(h.hwnd.get() as *mut std::ffi::c_void),
+    }).ok()?;
+    c.attach(move |e| {
+        let k = match e {
+            MediaControlEvent::Play => MediaKey::Play,
+            MediaControlEvent::Pause => MediaKey::Pause,
+            MediaControlEvent::Toggle => MediaKey::PlayPause,
+            MediaControlEvent::Next => MediaKey::Next,
+            MediaControlEvent::Previous => MediaKey::Prev,
+            MediaControlEvent::Stop => MediaKey::Stop,
+            _ => return,
+        };
+        let _ = tx.send(Msg::Media(k));
+        ctx.request_repaint();
+    }).ok()?;
+    Some(c)
+}
+
+/// Register the keyboard media keys (play/pause, next, previous, stop) with Windows.
+fn setup_media_keys() -> (Option<GlobalHotKeyManager>, HashMap<u32, MediaKey>) {
+    let mut ids = HashMap::new();
+    let Ok(m) = GlobalHotKeyManager::new() else { return (None, ids) };
+    for (code, key) in [(Code::MediaPlayPause, MediaKey::PlayPause), (Code::MediaTrackNext, MediaKey::Next),
+                        (Code::MediaTrackPrevious, MediaKey::Prev), (Code::MediaStop, MediaKey::Stop)] {
+        let hk = HotKey::new(None, code);
+        if m.register(hk).is_ok() { ids.insert(hk.id(), key); }
+    }
+    (Some(m), ids)
+}
 
 /// Results of background work, handled on the UI thread.
 enum Msg {
@@ -52,6 +91,7 @@ enum Msg {
     Net(bool),
     Flash(String, f32),
     Saved(Track),
+    Media(MediaKey),
 }
 
 #[derive(Clone)]
@@ -131,6 +171,11 @@ struct App {
     cover_cells: Vec<[u8; 3]>,
     eq_dirty: bool,
     theme_applied: String,
+    _hotkeys: Option<GlobalHotKeyManager>,
+    media_ids: HashMap<u32, MediaKey>,
+    smtc: Option<MediaControls>,
+    smtc_key: (Option<String>, u8),
+    smtc_last: Instant,
 }
 
 fn accent_rgb(theme: &str) -> [u8; 3] {
@@ -336,7 +381,10 @@ impl App {
         let _ = std::fs::create_dir_all(&tmpdir);
         apply_visuals(&cc.egui_ctx, rgb(accent_rgb(&settings.theme)));
         let theme_applied = settings.theme.clone();
+        let (hotkeys, media_ids) = setup_media_keys();
+        let smtc = setup_smtc(cc, bus.tx.clone(), cc.egui_ctx.clone());
         App {
+            _hotkeys: hotkeys, media_ids, smtc, smtc_key: (None, 0), smtc_last: Instant::now(),
             bus, rx, player, tmpdir,
             lufs: Arc::new(Loudness::load(&home.join("loudness.json"))),
             taste: Taste::load(&home.join("taste.json")),
@@ -437,6 +485,7 @@ impl App {
             }
             Msg::Flash(t, s) => self.flash(t, s),
             Msg::Saved(t) => self.taste.record_save(&t),
+            Msg::Media(k) => self.media_action(k),
         }
     }
 
@@ -1004,6 +1053,49 @@ impl App {
         self.flash(if added > 0 { format!("Added {added} to {name}") } else if tracks.is_empty() { "Nothing to add".into() } else { format!("{what} is already in {name}") }, 3.0);
     }
 
+    fn media_keys(&mut self) {
+        while let Ok(ev) = GlobalHotKeyEvent::receiver().try_recv() {
+            if ev.state != HotKeyState::Pressed { continue; }
+            if let Some(k) = self.media_ids.get(&ev.id).copied() { self.media_action(k); }
+        }
+    }
+
+    fn media_action(&mut self, k: MediaKey) {
+        match k {
+            MediaKey::PlayPause => self.toggle(),
+            MediaKey::Play => { if self.state == PState::Paused || !self.has_track { self.toggle(); } }
+            MediaKey::Pause => { if self.state == PState::Playing { self.toggle(); } }
+            MediaKey::Next => self.next(),
+            MediaKey::Prev => self.prev(),
+            MediaKey::Stop => self.stop(),
+        }
+    }
+
+    /// Tell Windows what is playing (overlay next to the volume pop-up, lock screen).
+    fn sync_smtc(&mut self) {
+        let track = self.current_track().cloned();
+        let status: u8 = if track.is_none() { 0 } else if self.busy || self.state == PState::Playing { 1 } else if self.state == PState::Paused { 2 } else { 0 };
+        let key = (track.as_ref().map(|t| t.id.clone()), status);
+        let Some(c) = self.smtc.as_mut() else { return };
+        if key == self.smtc_key && self.smtc_last.elapsed() < Duration::from_secs(5) { return; }
+        let id_changed = key.0 != self.smtc_key.0;
+        self.smtc_key = key;
+        self.smtc_last = Instant::now();
+        if let (true, Some(t)) = (id_changed, &track) {
+            let cover = Some(t.thumb.as_str()).filter(|u| u.starts_with("http"));
+            let _ = c.set_metadata(MediaMetadata {
+                title: Some(&t.title), artist: Some(&t.artist), album: Some(&t.album), cover_url: cover,
+                duration: (t.duration > 0).then(|| Duration::from_secs(t.duration as u64)),
+            });
+        }
+        let prog = Some(MediaPosition(Duration::from_secs_f64(self.pos.max(0.0))));
+        let _ = c.set_playback(match status {
+            1 => MediaPlayback::Playing { progress: prog },
+            2 => MediaPlayback::Paused { progress: prog },
+            _ => MediaPlayback::Stopped,
+        });
+    }
+
     // ---- keyboard
     fn keys(&mut self, ctx: &egui::Context) {
         if ctx.input(|i| i.key_pressed(Key::Escape)) {
@@ -1495,7 +1587,9 @@ impl App {
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.drain();
+        self.media_keys();
         self.tick(ctx);
+        self.sync_smtc();
         self.keys(ctx);
         if self.theme_applied != self.settings.theme {
             self.theme_applied = self.settings.theme.clone();
