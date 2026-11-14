@@ -1,5 +1,5 @@
 [package]
-name = "music-player"
+name = "meld"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.80"
@@ -26,3 +26,6 @@ opt-level = 2        # the equalizer runs per audio sample, debug builds would s
 [profile.release]
 lto = true
 codegen-units = 1
+
+[target.'cfg(windows)'.build-dependencies]
+embed-resource = "2.5"
