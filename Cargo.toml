@@ -14,6 +14,9 @@ indexmap = { version = "2", features = ["serde"] }
 regex = "1"
 rand = "0.8"
 lofty = "0.22"
+global-hotkey = "0.6"
+souvlaki = "0.7"
+raw-window-handle = "0.6"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 
